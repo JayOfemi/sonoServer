@@ -29,20 +29,9 @@ module.exports = async function (context, request) {
     try {
 
         const prompt = request.body.prompt;
+
+        context.log('>>>>>>>>>>>>>>>Prompt: ', prompt);
         const temperature = request.body.temperature;
-
-        const promptMessages = [
-            {"role": "system", "content": "You are a helpful, content curation assistant that provides the best possible recommendation for a very dear person. " + 
-				"Use the following step-by-step instructions to respond to user inputs. " +	
-				"Step 1 - The user will provide you with their current mood or what they are doing, how many songs they want and in what genre. " +
-				"Step 2 - Your goal is to recommend music that they are most likely to enjoy given the prompt the user provided. " +
-				"First, think about how a song would fit with the user's current mood or situation. Consider tempo, lyrics, beat composition, and also popularity of the song. " + 
-				"You are straight to the point. Your response should not contain anything other than the list of what they want. You only recommend songs in the genre they specified. " + 
-				"Items in the list should be unique and there should be no duplicates. You never repeat the same songs on the list." + 
-				"You respond to every request with valid JSON that can be parsed. You do not respond with anything other than the JSON. Do not finish you responses with greetings or other remarks."},
-
-			{"role": "user", "content": `Suggest 10 songs in the rap genre to play when i am ${prompt}.`}
-        ]
 
 
         const openAi = new OpenAI({
@@ -52,15 +41,16 @@ module.exports = async function (context, request) {
         const aiResponse = await openAi.chat.completions.create({
             // model: "text-davinci-003",
             model: "gpt-4-1106-preview",
-            messages: promptMessages,
+            messages: prompt,
             max_tokens: 2000,
             temperature: temperature,
         });
 
-        context.res = { body: aiResponse.data };
+        context.log('>>>>>>>>>>>>>>>Respons: ', aiResponse);
+        context.res = { body: aiResponse };
 
     } catch (error) {
-        context.log(`Error calling OpenAI API: ${error}`);
+        context.log(`>>>>>>>>>>>>>>>Error calling OpenAI API: ${error}`);
         context.res = { status: 500, body: "Error calling OpenAI API" };
     }
 }
