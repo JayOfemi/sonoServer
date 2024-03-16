@@ -28,25 +28,25 @@ module.exports = async function (context, request) {
     
     try {
 
-        const prompt = request.body.prompt;
-
-        context.log('>>>>>>>>>>>>>>>Prompt: ', prompt);
+        const model = request.body.model;
+        const messages = request.body.messages;
+        const max_tokens = request.body.max_tokens;
         const temperature = request.body.temperature;
 
+        context.log('>>>>>>>>>>>>>>>Prompt: ', messages);
 
         const openAi = new OpenAI({
             apiKey: apiKey,
         });
 
         const aiResponse = await openAi.chat.completions.create({
-            // model: "text-davinci-003",
-            model: "gpt-4-1106-preview",
-            messages: prompt,
-            max_tokens: 2000,
+            model: model,
+            messages: messages,
+            max_tokens: max_tokens,
             temperature: temperature,
         });
 
-        context.log('>>>>>>>>>>>>>>>Respons: ', aiResponse);
+        context.log('>>>>>>>>>>>>>>>Response: ', aiResponse);
         context.res = { body: aiResponse };
 
     } catch (error) {
