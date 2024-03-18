@@ -53,4 +53,6 @@ module.exports = async function (context, request) {
         context.log(`>>>>>>>>>>>>>>>Error calling OpenAI API: ${error}`);
         context.res = { status: 500, body: "Error calling OpenAI API" };
     }
+
+    context.done();
 }
