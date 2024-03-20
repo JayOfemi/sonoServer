@@ -1,5 +1,7 @@
 const { DefaultAzureCredential } =  require('@azure/identity');
 const { SecretClient } = require('@azure/keyvault-secrets');
+const azure = require('azure-storage');
+const { promisify } = require('util');
 const OpenAI = require('openai');
 
 module.exports = async function (context, request) {
@@ -28,6 +30,7 @@ module.exports = async function (context, request) {
     
     try {
 
+        const userId = request.body.userid;
         const model = request.body.model;
         const messages = request.body.messages;
         const max_tokens = request.body.max_tokens;
@@ -35,6 +38,32 @@ module.exports = async function (context, request) {
 
         context.log('>>>>>>>>>>>>>>>Prompt: ', messages);
 
+        // Update request count
+        if(!userId) {
+            context.res = {
+                status: 400,
+                body: "Please provide a user ID in the request parameters."
+            };
+            context.done();
+            return;
+        }
+
+        const tableName = 'sonoRequestsTable';
+        const tableRowName = 'userRequests';
+        const tableService = azure.createTableService(process.env.AzureWebJobsStorage);
+
+        // Retrieve the entity from the table
+        const result = await promisify(tableService.retrieveEntity).bind(tableService)(tableName, userId, tableRowName);
+
+        // Decrement requestCount
+        if(result.RequestCount._ > 0) {
+            result.RequestCount._--;
+        }
+
+        // Update the entity in the table
+        await promisify(tableService.insertOrReplaceEntity).bind(tableService)(tableName, result);
+
+        // Make api call
         const openAi = new OpenAI({
             apiKey: apiKey,
         });
@@ -51,7 +80,7 @@ module.exports = async function (context, request) {
 
     } catch (error) {
         context.log(`>>>>>>>>>>>>>>>Error calling OpenAI API: ${error}`);
-        context.res = { status: 500, body: "Error calling OpenAI API" };
+        context.res = { status: 500, body: "Error calling OpenAI API: " + error };
     }
 
     context.done();

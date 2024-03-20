@@ -19,17 +19,34 @@ module.exports = async function (context, req) {
             const tableName = 'sonoRequestsTable';
             const tableRowName = 'userRequests';
 
-            // Promisify the retrieveEntity function
             const retrieveEntityAsync = promisify(tableService.retrieveEntity).bind(tableService);
 
             // Retrieve the entity from the table
             const result = await retrieveEntityAsync(tableName, userId, tableRowName);
 
-            // If the entity exists, return the RequestCount
-            context.res = {
-                status: 200,
-                body: result.RequestCount._
-            };
+            // Calculate the time difference in milliseconds
+            const currentTime = new Date();
+            const timestamp = new Date(result.Timestamp._);
+            const timeDifference = currentTime - timestamp;
+
+            if(timeDifference >= 24 * 60 * 60 * 1000) { // 24 hours in milliseconds
+                // Reset the requestCount to 10
+                result.RequestCount._ = 10;
+
+                // Update the entity in the table
+                await promisify(tableService.insertOrReplaceEntity).bind(tableService)(tableName, result);
+
+                context.res = {
+                    status: 200,
+                    body: result.RequestCount._
+                };
+            } else {
+                // If it has not been 24 hours, simply return the entity's request count
+                context.res = {
+                    status: 200,
+                    body: result.RequestCount._
+                };
+            }
         } catch(error) {
             if(error.code === 'ResourceNotFound') {
                 // If the entity does not exist, insert a new one
