@@ -1,4 +1,5 @@
 const azure = require('azure-storage');
+const { promisify } = require('util');
 
 module.exports = async function (context, req) {
     context.log('Sono request tracker function processed a request.');
@@ -18,58 +19,45 @@ module.exports = async function (context, req) {
             const tableName = 'sonoRequestsTable';
             const tableRowName = 'userRequests';
 
-            // Retrieve the entity from the table
-            tableService.retrieveEntity(tableName, userId, tableRowName, (error, result, response) => {
-                if(!error) {
-                    // If the entity exists, return the RequestCount
-                    context.res = {
-                        status: 200,
-                        body: result.RequestCount._,
-                    };
-                    context.done();
-                } else if(error.code === 'ResourceNotFound') {
-                    // If the entity does not exist, insert a new one
-                    const entity = {
-                        PartitionKey: userId,
-                        RowKey: tableRowName,
-                        RequestCount: 10,
-                        Timestamp: new Date()
-                    };
+            // Promisify the retrieveEntity function
+            const retrieveEntityAsync = promisify(tableService.retrieveEntity).bind(tableService);
 
-                    tableService.insertEntity(tableName, entity, (insertError, insertResult, insertResponse) => {
-                        if(!insertError) {
-                            context.res = {
-                                status: 201,
-                                body: entity.RequestCount._
-                            };
-                        } else {
-                            context.res = {
-                                status: 500,
-                                body: ">>>>>>>>>>>>>>>>>Error inserting entity: " + insertError.message
-                            };
-                        }
-                        context.done();
-                    });
-                } else {
-                    context.res = {
-                        status: 500,
-                        body: ">>>>>>>>>>>>>>>>>Error retrieving entity: " + error.message
-                    };
-                    context.done();
-                }
-            });
-        } catch (err) {
+            // Retrieve the entity from the table
+            const result = await retrieveEntityAsync(tableName, userId, tableRowName);
+
+            // If the entity exists, return the RequestCount
             context.res = {
-                status: 500,
-                body: ">>>>>>>>>>>>>>>>>Error: " + err.message
+                status: 200,
+                body: result.RequestCount._
             };
-            context.done();
+        } catch(error) {
+            if(error.code === 'ResourceNotFound') {
+                // If the entity does not exist, insert a new one
+                const entity = {
+                    PartitionKey: userId,
+                    RowKey: tableRowName,
+                    RequestCount: 10,
+                    Timestamp: new Date()
+                };
+
+                // Insert the entity into the table
+                await promisify(tableService.insertEntity).bind(tableService)(tableName, entity);
+
+                context.res = {
+                    status: 201,
+                    body: entity.RequestCount._
+                };
+            } else {
+                context.res = {
+                    status: 500,
+                    body: "Error retrieving or inserting entity: " + error
+                };
+            }
         }
     } else {
         context.res = {
             status: 400,
             body: "Please provide a user ID in the request parameters."
         };
-        context.done();
     }
 };
