@@ -7,6 +7,8 @@ const OpenAI = require('openai');
 module.exports = async function (context, request) {
     context.log('Sono AI request function processed a request.');
 
+    let isUsingSonoApiKey = false;
+
     const userOptions = request.body.options;
     let apiKey = userOptions?.userApiKey;
     const userId = userOptions?.userId;
@@ -18,6 +20,8 @@ module.exports = async function (context, request) {
 
     if(!apiKey) {
         // Use sono key
+        isUsingSonoApiKey = true;
+
         const keyVaultName = process.env["key_vault_name"]; // Set in Function App Configuration settings
         const kvUri = `https://${keyVaultName}.vault.azure.net`;
 
@@ -46,7 +50,6 @@ module.exports = async function (context, request) {
 
         context.log('>>>>>>>>>>>>>>>Prompt: ', messages);
 
-        // Update request count
         if(!userId) {
             context.res = {
                 status: 400,
@@ -56,20 +59,32 @@ module.exports = async function (context, request) {
             return;
         }
 
-        const tableName = 'sonoRequestsTable';
-        const tableRowName = 'userRequests';
-        const tableService = azure.createTableService(process.env.AzureWebJobsStorage);
+        if(isUsingSonoApiKey) {
+            // Update request count
+            const tableName = 'sonoRequestsTable';
+            const tableRowName = 'userRequests';
+            const tableService = azure.createTableService(process.env.AzureWebJobsStorage);
 
-        // Retrieve the entity from the table
-        const result = await promisify(tableService.retrieveEntity).bind(tableService)(tableName, userId, tableRowName);
+            // Retrieve the entity from the table
+            const result = await promisify(tableService.retrieveEntity).bind(tableService)(tableName, userId, tableRowName);
 
-        // Decrement requestCount
-        if(result.RequestCount._ > 0) {
-            result.RequestCount._--;
+            // Decrement requestCount
+            if(result.RequestCount._ > 0) {
+                result.RequestCount._--;
+            } else {
+                if(userId !== process.env.OWNER_ID) {
+                    context.res = {
+                        status: 400,
+                        body: "Out of requests."
+                    };
+                    context.done();
+                    return;
+                }
+            }
+
+            // Update the entity in the table
+            await promisify(tableService.insertOrReplaceEntity).bind(tableService)(tableName, result);
         }
-
-        // Update the entity in the table
-        await promisify(tableService.insertOrReplaceEntity).bind(tableService)(tableName, result);
 
         // Make api call
         const openAi = new OpenAI({
